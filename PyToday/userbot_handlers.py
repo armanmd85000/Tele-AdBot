@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from telethon import TelegramClient, events
 from PyToday import config
 from PyToday.queue_manager import queue_manager
@@ -129,12 +130,29 @@ def register_observer(client: TelegramClient):
             bot = "@" + bot
         normalized_bots.append(bot.lower())
 
+    # Shared variable to store my_info
+    my_info = {"data": None}
+
     logger.info(f"Observer started for group {target_chat_id} monitoring bots: {normalized_bots}")
 
     @client.on(events.NewMessage(chats=target_chat_id))
     async def leech_bot_observer(event):
+        # Lazy load my_info
+        if my_info["data"] is None:
+             try:
+                 my_info["data"] = await client.get_me()
+             except Exception as e:
+                 logger.error(f"Failed to fetch self info: {e}")
+                 return
+
+        me = my_info["data"]
+        if not me:
+            logger.warning("Could not get 'me' info, skipping observer check.")
+            return
+
         sender = await event.get_sender()
         if not sender or not hasattr(sender, 'username') or not sender.username:
+            # logger.info("Sender has no username, ignoring.")
             return
 
         sender_username = f"@{sender.username}".lower()
@@ -143,10 +161,26 @@ def register_observer(client: TelegramClient):
         try:
             bot_index = normalized_bots.index(sender_username)
         except ValueError:
+            # logger.info(f"Sender {sender_username} is not a leech bot.")
             return # Not one of the monitored bots
 
         # Check content for success/failure triggers
         text = event.text or ""
+
+        # KEY CHECK: Ensure the task belongs to ME
+        # We check if my_username is present in the text OR my First Name.
+        is_my_task = False
+
+        if me.username and f"@{me.username}".lower() in text.lower():
+            is_my_task = True
+
+        if not is_my_task and me.first_name:
+             if me.first_name in text:
+                 is_my_task = True
+
+        if not is_my_task:
+            # Not my task, ignore.
+            return
 
         # Failure triggers
         failure_keywords = [
@@ -168,14 +202,13 @@ def register_observer(client: TelegramClient):
              is_success = True
         elif "Task By" in text and "Total Files" in text:
              # Another success pattern from example
-             # "Mercy.2026...mkv \n ... Out Mode -> #Leech ... Total Files -> 1 ... Task By ..."
              is_success = True
 
         if is_success:
-            logger.info(f"Detected SUCCESS from Bot {bot_index+1} ({sender_username})")
+            logger.info(f"Detected SUCCESS from Bot {bot_index+1} ({sender_username}) for ME")
             await queue_manager.mark_completed(bot_index, True, client, target_chat_id)
         elif is_failure:
-            logger.info(f"Detected FAILURE from Bot {bot_index+1} ({sender_username})")
+            logger.info(f"Detected FAILURE from Bot {bot_index+1} ({sender_username}) for ME")
             await queue_manager.mark_completed(bot_index, False, client, target_chat_id)
 
     logger.info("Userbot observer registered.")
