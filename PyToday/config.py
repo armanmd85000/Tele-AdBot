@@ -64,3 +64,13 @@ _default_group_file = _os.path.join(_script_dir, '..', 'group_mps.txt')
 if not _os.path.exists(_default_group_file):
     _default_group_file = 'group_mps.txt'
 GROUP_LINKS_FILE = os.getenv("GROUP_LINKS_FILE", _default_group_file)
+
+# Userbot Configuration
+API_ID = os.getenv("API_ID", "")
+API_HASH = os.getenv("API_HASH", "")
+SESSION_STRING = os.getenv("SESSION_STRING", "")
+TARGET_GROUP_ID = os.getenv("TARGET_GROUP_ID", "")  # Group ID where leech bots are (e.g. -100...)
+
+# Leech Bots Configuration
+# Comma-separated list of usernames (e.g., @bot1,@bot2,@bot3,@bot4,@bot5)
+LEECH_BOT_USERNAMES = [x.strip() for x in os.getenv("LEECH_BOT_USERNAMES", "").split(",") if x.strip()]
